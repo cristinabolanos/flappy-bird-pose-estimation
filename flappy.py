@@ -1,4 +1,19 @@
 #!/usr/bin/env python3
+# Copyright (C) 2023  Cristina Bolaños Peño
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+
 import math
 import sys
 import os.path
@@ -104,8 +119,6 @@ class Game:
         self.background = pygame.image.load(ASSETS_DIR + '/bg.png')
         self.background = pygame.transform.scale(
             self.background, self.display.get_size())
-        # Logo
-        self.logo = pygame.image.load(ASSETS_DIR + '/logo.png')
         # Ground
         self.ground_grp = pygame.sprite.Group()
         for i in range(2):
@@ -250,9 +263,6 @@ class Game:
             self.display.blit(frame, (
                 self.display.get_width() - self.camera.get_size()[0],
                 self.display.get_height() - self.camera.get_size()[1]))
-            self.display.blit(self.logo, (
-                self.display.get_width() // 2 - self.logo.get_size()[0] // 2,
-                self.display.get_height() - self.logo.get_size()[1]))
             self.display.blit(text, text_pos)
             pygame.display.flip()
             for ev in pygame.event.get(pygame.KEYDOWN):
@@ -263,29 +273,30 @@ class Game:
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser()
+    parser = ArgumentParser(
+        description='Flappy Bird game using pose estimation,')
     parser.add_argument(
-        '-i', '--input', default='/dev/video0',
-        help='Video device. Default is "/dev/video0".')
+        '-c', '--camera', default='/dev/video0',
+        help='Camera device. Default is "/dev/video0".')
     parser.add_argument(
-        '-s', '--speed', metavar='1', type=int,
-        choices=(1, 2, 3, 4), default=1,
-        help='Movement speed. Choices are: 1, 2, 3, 4. ' +
-        'Default is 1.')
+        '-s', '--speed', metavar='1',
+        type=int, default=1,
+        help='Movement speed. Default is 1.')
     parser.add_argument(
-        '-l', '--level', metavar='1', type=int,
-        choices=(1, 2, 3, 4), default=1,
-        help='Level of difficulty. Choices are: 1, 2, 3, 4. ' +
-        'Default is 1.')
+        '-l', '--level', metavar='1',
+        type=int, default=1,
+        help='Level of difficulty (affects the space ' +
+        'between pipes). Default is 1.')
     parser.add_argument(
-        '-p', '--precision', metavar='1', type=int,
-        choices=(1, 2), default=1,
+        '-p', '--precision', metavar='1',
+        type=int, choices=(1, 2), default=1,
         help='Detector (MediaPipe) precision. Choices are: 1, 2. ' +
         'Default is 1.')
     args = parser.parse_args()
     pygame.init()
     pygame.camera.init()
-    Game(args.input, args.precision,
-         args.level, args.speed).run()
+    Game(args.camera, args.precision,
+         min(4, max(1, abs(int(args.level)))),
+         min(4, max(1, abs(int(args.speed))))).run()
     pygame.quit()
     sys.exit(0)
