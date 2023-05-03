@@ -19,6 +19,7 @@ import sys
 import os.path
 from argparse import ArgumentParser
 from random import randint
+import json
 
 import mediapipe as mp
 import pygame
@@ -215,6 +216,7 @@ class Game:
     def run(self, delay_ms: int = 5000) -> None:
         # Flags
         running = True
+        started = False
         game_over = False
         clock = pygame.time.Clock()
         ts = pygame.time.get_ticks()
@@ -224,7 +226,16 @@ class Game:
             elapsed_ms = pygame.time.get_ticks() - ts
             self.display.blit(self.background, (0, 0))
             frame = self.camera.get_image()
-            if elapsed_ms <= delay_ms:  # Starting screen
+            if not started:
+                text = self.font.render(
+                    'Press any key to start', True, (255, 255, 255))
+                text_pos = (self.display.get_width() // 2 - text.get_width() // 2,
+                            self.display.get_height() // 2 - text.get_height() // 2)
+                if len(pygame.event.get(pygame.KEYDOWN)) > 0 or len(
+                        pygame.event.get(pygame.MOUSEBUTTONDOWN)) > 0:
+                    started = True
+                    ts = pygame.time.get_ticks()
+            elif elapsed_ms <= delay_ms:  # Starting screen
                 text = self.font.render(
                     'Starting in {}'.format(5 - elapsed_ms // 1000),
                     True, (255, 255, 255))
@@ -276,6 +287,8 @@ if __name__ == '__main__':
     parser = ArgumentParser(
         description='Flappy Bird game using pose estimation,')
     parser.add_argument(
+        '--config', default=None, help='Configuration file (JSON).')
+    parser.add_argument(
         '-c', '--camera', default='/dev/video0',
         help='Camera device. Default is "/dev/video0".')
     parser.add_argument(
@@ -293,6 +306,16 @@ if __name__ == '__main__':
         help='Detector (MediaPipe) precision. Choices are: 1, 2. ' +
         'Default is 1.')
     args = parser.parse_args()
+    if args.config is not None:
+        if not os.path.exists(args.config):
+            parser.error(f'File not found: {args.config}')
+        with open(args.config) as fr:
+            data = json.load(fr)
+        for k, v in data.items():
+            if k == 'camera' and args.camera == '/dev/video0':
+                setattr(args, 'camera', v)
+            elif getattr(args, k, 1) == 1:
+                setattr(args, k, v)
     pygame.init()
     pygame.camera.init()
     Game(args.camera, args.precision,

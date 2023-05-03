@@ -1,0 +1,6 @@
+{
+  "speed": 1,
+  "level": 1,
+  "camera": "/dev/video0",
+  "precision": 1
+}
