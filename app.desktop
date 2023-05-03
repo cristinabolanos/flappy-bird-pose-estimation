@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Flappy Bird
+Type=Application
+Exec=/usr/bin/python3 $PACKAGE_DIR/flappy.py --config $PACKAGE_CONFIG
+Path=$PACKAGE_DIR
+Terminal=True
+Icon=$PACKAGE_DIR/assets/icon.png
