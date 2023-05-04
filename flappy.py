@@ -299,6 +299,7 @@ class Game:
             int(self.display.get_width() * 0.25),
             self.display.get_height() // 2]
         self.pipe_grp.empty()
+        self.last_pipe_id = 1
         self.generate_pipe_pair()
 
     def run(self, delay_ms: int = 5000) -> None:
