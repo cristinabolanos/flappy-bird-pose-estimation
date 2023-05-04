@@ -29,6 +29,25 @@ ASSETS_DIR = os.path.join(os.path.abspath(
     os.path.dirname(__file__))) + '/assets'
 
 
+def load_image(name: str, display_width: int,
+               display_height: int) -> pygame.Surface:
+    path = os.path.join(ASSETS_DIR, f'{name}.png')
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
+    img = pygame.image.load(path)
+    return pygame.transform.scale(img, (
+        img.get_width() * display_width // 1920,
+        img.get_height() * display_height // 1080))
+
+
+def load_fonts(name: str, display_height: int) -> tuple[pygame.font.Font]:
+    path = os.path.join(ASSETS_DIR, f'{name}.ttf')
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
+    return (pygame.font.Font(path, int(display_height * 0.20)),
+            pygame.font.Font(path, int(display_height * 0.10)))
+
+
 class FlappySprite(pygame.sprite.Sprite):
     def __init__(self, center_x: int, center_y: int,
                  images: list[pygame.Surface],
@@ -100,9 +119,40 @@ class GroundSprite(pygame.sprite.Sprite):
         if game_over:  # Do not move on game over
             return
         self.rect.x -= self.x_delta
-        if self.rect.x < -self.rect.width:
+        if self.rect.x < -self.rect.width // 2:
             # Re-position at the screen end
-            self.rect.x = self.rect.width
+            self.rect.x = 0
+
+
+class Button:
+    def __init__(self, cx: int, cy: int,
+                 text: str, font: pygame.font.Font) -> None:
+        self.clicked = False
+        self.text = font.render(text, True, (255, 255, 255))
+        self.shadow = font.render(text, True, (189, 78, 21))
+        self.bg = pygame.Surface((self.text.get_width() * 1.1,
+                                  self.text.get_height() * 1.1))
+        self.bg.fill((230, 97, 29))
+        self.rect = self.bg.get_rect()
+        self.rect.center = [cx, cy]
+        self.text_x = cx - self.text.get_width() // 2
+        self.text_y = cy - self.text.get_height() * 0.75
+
+    def draw(self, display: pygame.Surface) -> bool:
+        retval = False
+        pos = pygame.mouse.get_pos()
+        if self.rect.collidepoint(pos):
+            if pygame.mouse.get_pressed()[0] and not self.clicked:
+                self.clicked = True
+                retval = True
+        if not pygame.mouse.get_pressed()[0]:
+            self.clicked = False
+
+        display.blit(self.bg, (self.rect.x, self.rect.y))
+        display.blit(self.shadow, (self.text_x, self.text_y +
+                                   self.text.get_height() * 0.05))
+        display.blit(self.text, (self.text_x, self.text_y))
+        return retval
 
 
 class Game:
@@ -111,33 +161,41 @@ class Game:
                  level: int = 1, speed: int = 1) -> None:
         self.display = pygame.display.set_mode(
             (0, 0), pygame.FULLSCREEN)
-        self.font = pygame.font.Font(ASSETS_DIR + '/font.ttf', 60)
+        self.font, self.font_btn = load_fonts(
+            'font', self.display.get_height())
         # Controls
         self.score = 0
+        self.best = 0
         self.speed = min(4, max(1, speed))
         self.level = min(4, max(1, level))
+        self.start_btn = Button(
+            self.display.get_width() // 2,
+            self.display.get_height() // 2,
+            'start', self.font_btn)
+        self.restart_btn = Button(
+            self.display.get_width() // 2,
+            self.display.get_height() * 0.9,
+            'restart', self.font_btn)
         # Background
-        self.background = pygame.image.load(ASSETS_DIR + '/bg.png')
-        self.background = pygame.transform.scale(
-            self.background, self.display.get_size())
+        self.background = load_image('bg', self.display.get_width(),
+                                     self.display.get_height())
+        self.background_blur = pygame.Surface(self.background.get_size(), pygame.SRCALPHA, 32)
+        self.background_blur.convert_alpha()
+        self.background_blur.fill((255, 255, 255, 64))
         # Ground
         self.ground_grp = pygame.sprite.Group()
-        for i in range(2):
-            img = pygame.image.load(ASSETS_DIR + '/ground.png')
-            img = pygame.transform.scale(img, (
-                self.display.get_width(),
-                179 * self.display.get_width() // 1920))
-            sprite = GroundSprite(
-                self.display.get_width() * i,
-                self.display.get_height() - img.get_height(),
-                img, speed)
-            self.ground_grp.add(sprite)
+        ground_img = load_image('ground', self.display.get_width(),
+                                self.display.get_height())
+        sprite = GroundSprite(
+            0, self.display.get_height() - ground_img.get_height(),
+            ground_img, speed)
+        self.ground_grp.add(sprite)
         # Flappy
         self.flappy = FlappySprite(
             int(self.display.get_width() * 0.25),
             self.display.get_height() // 2,
-            tuple(pygame.image.load(
-                ASSETS_DIR + f'/bird{i}.png') for i in range(1, 4)),
+            tuple(load_image(f'bird{i}', self.display.get_width(),
+                             self.display.get_height()) for i in range(1, 4)),
             speed)
         self.flappy_grp = pygame.sprite.Group()
         self.flappy_grp.add(self.flappy)
@@ -162,13 +220,15 @@ class Game:
             self.display.get_width(),
             center_y + self.pipe_gap_px // 2,
             self.last_pipe_id,
-            pygame.image.load(ASSETS_DIR + '/pipe.png'),
+            load_image('pipe', self.display.get_width(),
+                       self.display.get_height()),
             self.speed))
         self.pipe_grp.add(PipeSprite(
             self.display.get_width(),
             center_y - self.pipe_gap_px // 2,
             self.last_pipe_id,
-            pygame.image.load(ASSETS_DIR + '/pipe.png'),
+            load_image('pipe', self.display.get_width(),
+                       self.display.get_height()),
             self.speed, True))
         self.last_pipe_id += 1
 
@@ -179,6 +239,7 @@ class Game:
             elif pipe.rect.bottomright[
                     0] <= self.flappy.rect.bottomleft[0]:
                 self.score = pipe.pair_id
+                self.best = max(self.score, self.best)
 
     def get_direction(self, frame: pygame.Surface,
                       right_arm: bool = True) -> int:
@@ -213,6 +274,33 @@ class Game:
             0].rect.top  # Touched ground
         return retval
 
+    def draw_text(self, text: str, position: str = 'middle',
+                  shadow: bool = True) -> None:
+        x = self.display.get_width() // 2
+        if position == 'top':
+            y = self.display.get_height() * 0.1
+        elif position == 'bottom':
+            y = self.display.get_height() * 0.9
+        else:
+            y = self.display.get_height() // 2
+        _text = self.font.render(text, True, (255, 255, 255))
+        x -= _text.get_width() // 2
+        y -= _text.get_height() // 2
+        if shadow:
+            self.display.blit(
+                self.font.render(text, True, (38, 38, 38)),
+                (x, y + _text.get_height() * 0.05))
+        self.display.blit(_text, (x, y))
+
+    def restart(self) -> None:
+        self.score = 0
+        self.flappy_grp.update()
+        self.flappy.rect.center = [
+            int(self.display.get_width() * 0.25),
+            self.display.get_height() // 2]
+        self.pipe_grp.empty()
+        self.generate_pipe_pair()
+
     def run(self, delay_ms: int = 5000) -> None:
         # Flags
         running = True
@@ -224,62 +312,68 @@ class Game:
         while running:
             clock.tick(60)
             elapsed_ms = pygame.time.get_ticks() - ts
+            # Draw scene
             self.display.blit(self.background, (0, 0))
-            frame = self.camera.get_image()
-            if not started:
-                text = self.font.render(
-                    'Press any key to start', True, (255, 255, 255))
-                text_pos = (self.display.get_width() // 2 - text.get_width() // 2,
-                            self.display.get_height() // 2 - text.get_height() // 2)
-                if len(pygame.event.get(pygame.KEYDOWN)) > 0 or len(
-                        pygame.event.get(pygame.MOUSEBUTTONDOWN)) > 0:
-                    started = True
-                    ts = pygame.time.get_ticks()
-            elif elapsed_ms <= delay_ms:  # Starting screen
-                text = self.font.render(
-                    'Starting in {}'.format(5 - elapsed_ms // 1000),
-                    True, (255, 255, 255))
-                text_pos = (self.display.get_width() // 2 - text.get_width() // 2,
-                            self.display.get_height() // 2 - text.get_height() // 2)
-            else:  # Playing
-                text = self.font.render(
-                    str(self.score), True, (255, 255, 255))
-                text_pos = (self.display.get_width() // 2,
-                            int(self.display.get_height() * 0.1))
-                self.pipe_grp.draw(self.display)
-                game_over |= self.check_collision()
-                direction = self.get_direction(frame)
-                # Update sprites
-                self.ground_grp.update(game_over=game_over)
-                self.pipe_grp.update(game_over=game_over)
-                self.flappy_grp.update(
-                    direction=direction, game_over=game_over)
-                if not self.display.get_rect().contains(self.flappy.rect):
-                    # Flappy got too down (game over)
-                    self.flappy.kill()
-                # Check if need to generate pipes
-                if self.pipe_grp.sprites()[
-                        -1].rect.x < self.x_pipe_gen_trigger and not game_over:
-                    self.generate_pipe_pair()
-                # Update score
-                self.update_score()
-            if game_over:
-                game_over_text = self.font.render(
-                    'Game Over', True, (255, 255, 255))
-                self.display.blit(game_over_text, (
-                    self.display.get_width() // 2 - game_over_text.get_width() // 2,
-                    self.display.get_height() // 2 - game_over_text.get_height() // 2))
             self.flappy_grp.draw(self.display)
+            self.pipe_grp.draw(self.display)
             self.ground_grp.draw(self.display)
-            self.display.blit(frame, (
-                self.display.get_width() - self.camera.get_size()[0],
-                self.display.get_height() - self.camera.get_size()[1]))
-            self.display.blit(text, text_pos)
-            pygame.display.flip()
+            frame = self.camera.get_image()
+            display_frame = pygame.transform.scale(frame, (
+                self.display.get_height() * 0.3 * frame.get_width() // frame.get_height(),
+                self.display.get_height() * 0.3))
+            self.display.blit(display_frame, (
+                self.display.get_width() - display_frame.get_width(),
+                self.display.get_height() - display_frame.get_height()))
+            # Check exiting
             for ev in pygame.event.get(pygame.KEYDOWN):
                 if ev.key == pygame.K_ESCAPE:
                     running = False
                     break
+            if not running:
+                pygame.display.flip()  # Show display and exit
+                break
+
+            if not started:  # Wait for start button clicked
+                self.display.blit(self.background_blur, (0,0))
+                self.start_btn.draw(self.display)
+                started = self.start_btn.clicked
+                ts = pygame.time.get_ticks()
+                pygame.display.flip()  # Show display and continue loop
+                continue
+            elif elapsed_ms <= delay_ms:  # Wait some time for preparing after start...
+                self.display.blit(self.background_blur, (0,0))
+                self.draw_text('Starting in {}'.format(5 - elapsed_ms // 1000))
+                pygame.display.flip()  # Show display and continue loop
+                continue
+
+            # Playing
+            game_over |= self.check_collision()
+            direction = self.get_direction(frame)
+            # Update sprites
+            self.ground_grp.update(game_over=game_over)
+            self.pipe_grp.update(game_over=game_over)
+            if self.display.get_rect().contains(self.flappy.rect):
+                self.flappy_grp.update(
+                    direction=direction, game_over=game_over)
+            # Check if need to generate pipes
+            if self.pipe_grp.sprites()[
+                    -1].rect.x < self.x_pipe_gen_trigger and not game_over:
+                self.generate_pipe_pair()
+            # Update score
+            self.update_score()
+            if game_over:
+                self.display.blit(self.background_blur, (0,0))
+                self.draw_text(
+                    f'Score: {self.score} Best: {self.best}', position='top')
+                self.draw_text('Game Over')
+                self.restart_btn.draw(self.display)
+                if self.restart_btn.clicked:
+                    self.restart()
+                    ts = pygame.time.get_ticks()
+                    game_over = False
+            else:
+                self.draw_text(str(self.score), position='top')
+            pygame.display.flip()
         self.camera.stop()
 
 
